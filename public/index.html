@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Past Paper Analyzer</title>
+</head>
+<body>
+  <h1>Past Paper Analyzer</h1>
+
+  <h3>Option A: upload a PDF</h3>
+  <input type="file" id="paperInput" accept="application/pdf">
+  <button id="uploadBtn">Upload</button>
+
+  <h3>Option B: paste paper text</h3>
+  <textarea id="paperText" rows="12" cols="70"></textarea><br>
+  <button id="splitBtn">Split into questions</button>
+
+  <br><br>
+<input id="yearInput" placeholder="Year e.g. 2024">
+<button id="addBtn">Add paper to analysis</button>
+<button id="statsBtn">Show repeat topics</button>
+
+  <pre id="output"></pre>
+
+  <script>
+    const output = document.getElementById('output');
+    const paperText = document.getElementById('paperText');
+
+    document.getElementById('uploadBtn').addEventListener('click', async () => {
+      const file = document.getElementById('paperInput').files[0];
+      if (!file) return alert('Pick a PDF first');
+      const formData = new FormData();
+      formData.append('paper', file);
+      const res = await fetch('/upload', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.error) { output.textContent = data.error; return; }
+      paperText.value = data.text;
+      output.textContent = `Read ${data.pages} pages. Now click "Split into questions".`;
+    });
+
+    document.getElementById('splitBtn').addEventListener('click', async () => {
+      const res = await fetch('/split', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: paperText.value })
+      });
+      const data = await res.json();
+      output.textContent = data.questions
+        .map(q => `Q${q.number} [${q.marks} marks] - ${q.topics.join(', ')}\n${q.text}`)
+        .join('\n\n');
+    });
+
+    document.getElementById('addBtn').addEventListener('click', async () => {
+  const year = document.getElementById('yearInput').value.trim();
+  if (!year || !paperText.value.trim()) return alert('Add a year and paper text');
+  const res = await fetch('/papers', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ year, text: paperText.value })
+  });
+  const data = await res.json();
+  output.textContent = `Added ${year} (${data.questionCount} questions). Papers so far: ${data.totalPapers}`;
+});
+
+document.getElementById('statsBtn').addEventListener('click', async () => {
+  const res = await fetch('/stats');
+  const data = await res.json();
+  if (!data.totalPapers) { output.textContent = 'No papers added yet'; return; }
+  output.textContent = `Based on ${data.totalPapers} paper(s):\n\n` +
+    data.topics.map(t =>
+      `${t.topic}: appeared in ${t.papersCount}/${data.totalPapers} papers, ${t.totalMarks} marks total`
+    ).join('\n');
+});
+  </script>
+  
+</body>
+</html>
