@@ -4,94 +4,65 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Exam Radar</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; padding: 20px; max-width: 720px; margin: auto; }
-  h1 { font-size: 26px; margin-bottom: 4px; }
-  .sub { color: #94a3b8; margin-bottom: 24px; }
-  .card { background: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 12px; cursor: pointer; }
-  .card:hover { background: #273449; }
-  .row { display: flex; justify-content: space-between; font-weight: 600; }
-  .bar { height: 8px; background: #334155; border-radius: 4px; margin: 10px 0 6px; }
-  .fill { height: 100%; background: #2dd4bf; border-radius: 4px; }
-  .meta { color: #94a3b8; font-size: 14px; }
-  .q { background: #1e293b; border-left: 4px solid #2dd4bf; padding: 14px; margin-bottom: 10px; border-radius: 8px; white-space: pre-wrap; }
-  .tag { color: #2dd4bf; font-size: 13px; margin-bottom: 6px; }
-  button { background: #2dd4bf; color: #0f172a; border: 0; padding: 10px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; margin: 8px 8px 16px 0; }
-  button.ghost { background: transparent; color: #2dd4bf; border: 1px solid #2dd4bf; }
-</style>
+<link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <h1>Exam Radar</h1>
-  <p class="sub" id="sub">Loading...</p>
-  <a href="/export" style="color:#2dd4bf;font-size:14px;display:inline-block;margin-bottom:16px;">Export analysis (JSON)</a>
+<main>
+  <header class="hero">
+    <div class="blooms" aria-hidden="true">🌸🌼🌺🌻🌷</div>
+    <h1>Exam Radar</h1>
+    <p class="lead">See which topics keep getting asked, then practice the real questions.</p>
+    <nav class="nav"><a href="/index.html">Add papers</a><a href="/export">Export JSON</a></nav>
+  </header>
+  <h2>Hot topics</h2>
+  <p class="note" id="sub">Loading...</p>
   <div id="view"></div>
-
+</main>
 <script>
-const view = document.getElementById('view');
-const sub = document.getElementById('sub');
-let papers = [];
+const $=id=>document.getElementById(id), view=$('view'), sub=$('sub');
+const COLORS=['#e11d74','#ea580c','#2563eb','#7c3aed','#0d9488'];
+let papers=[];
 
-async function showTopics() {
-  const stats = await fetch('/stats').then(r => r.json());
-  papers = await fetch('/papers').then(r => r.json());
-  sub.textContent = `Based on ${stats.totalPapers} past papers. Tap a topic to practice.`;
-  view.innerHTML = '';
-  stats.topics.forEach(t => {
-    const pct = Math.round((t.papersCount / stats.totalPapers) * 100);
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.innerHTML = `
-      <div class="row"><span>${t.topic}</span><span>${pct}%</span></div>
-      <div class="bar"><div class="fill" style="width:${pct}%"></div></div>
-      <div class="meta">In ${t.papersCount} of ${stats.totalPapers} papers · ${t.totalMarks} marks</div>`;
-    card.onclick = () => showTopic(t.topic);
-    view.appendChild(card);
+async function topics(){
+  const st=await fetch('/stats').then(r=>r.json());
+  papers=await fetch('/papers').then(r=>r.json());
+  view.innerHTML='';
+  if(!st.totalPapers){sub.textContent='No papers yet. Add some on the Add papers page.';return}
+  sub.textContent=`Based on ${st.totalPapers} past paper${st.totalPapers===1?'':'s'}. Tap a topic to practice.`;
+  st.topics.forEach((t,i)=>{
+    const pct=Math.round(t.papersCount/st.totalPapers*100);
+    const c=document.createElement('button');
+    c.className='card';c.style.setProperty('--c',COLORS[i%5]);
+    c.innerHTML=`<div class="top"><span>${t.topic}</span><span class="pct">${pct}%</span></div><div class="track"><div class="fill" style="width:${pct}%"></div></div><div class="meta">Asked in ${t.papersCount} of ${st.totalPapers} papers, ${t.totalMarks} marks in total</div>`;
+    c.onclick=()=>topic(t.topic);
+    view.appendChild(c);
   });
 }
-
-function questionsFor(topic) {
-  const list = [];
-  papers.forEach(p => p.questions.forEach(q => {
-    if (q.topics.includes(topic)) list.push({ year: p.year, ...q });
-  }));
-  return list.sort((a, b) => b.year - a.year);
+function qsFor(name){
+  const l=[];
+  papers.forEach(p=>p.questions.forEach(q=>{if(q.topics.includes(name))l.push({year:p.year,...q})}));
+  return l.sort((a,b)=>b.year-a.year);
 }
-
-function showTopic(topic) {
-  const list = questionsFor(topic);
-  sub.textContent = `${topic}: ${list.length} past questions`;
-  view.innerHTML = '<button class="ghost" id="back">Back</button><button id="practice">Practice mode</button>';
-  document.getElementById('back').onclick = showTopics;
-  document.getElementById('practice').onclick = () => practice(topic, list, 0);
-  list.forEach(q => {
-    const d = document.createElement('div');
-    d.className = 'q';
-    d.innerHTML = `<div class="tag">${q.year} · ${q.marks} marks</div>`;
-    d.append(q.text);
-    view.appendChild(d);
-  });
+function qBox(q){
+  const d=document.createElement('div');d.className='q';
+  const s=document.createElement('small');s.textContent=`${q.year}, ${q.marks} marks`;
+  d.append(s,q.text);return d;
 }
-
-function practice(topic, list, i) {
-  const q = list[i];
-  sub.textContent = `Practice: ${topic} (${i + 1} of ${list.length})`;
-  view.innerHTML = '<button class="ghost" id="back">Back</button>';
-  document.getElementById('back').onclick = () => showTopic(topic);
-  const d = document.createElement('div');
-  d.className = 'q';
-  d.innerHTML = `<div class="tag">${q.year} · ${q.marks} marks</div>`;
-  d.append(q.text);
-  view.appendChild(d);
-  if (i + 1 < list.length) {
-    const next = document.createElement('button');
-    next.textContent = 'Next question';
-    next.onclick = () => practice(topic, list, i + 1);
-    view.appendChild(next);
-  }
+function topic(name){
+  const l=qsFor(name);
+  sub.textContent=`${name}: ${l.length} past question${l.length===1?'':'s'}`;
+  view.innerHTML='<button class="b g" id="back">Back to topics</button><button class="b" id="prac">Practice these</button>';
+  $('back').onclick=topics;$('prac').onclick=()=>practice(name,l,0);
+  l.forEach(q=>view.appendChild(qBox(q)));
 }
-
-showTopics();
+function practice(name,l,i){
+  sub.textContent=`Practice, ${name}: question ${i+1} of ${l.length}`;
+  view.innerHTML='<button class="b g" id="back">Back</button>';
+  $('back').onclick=()=>topic(name);
+  view.appendChild(qBox(l[i]));
+  if(i+1<l.length){const n=document.createElement('button');n.className='b';n.textContent='Next question';n.onclick=()=>practice(name,l,i+1);view.appendChild(n)}
+}
+topics();
 </script>
 </body>
 </html>
